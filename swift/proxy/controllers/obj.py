@@ -626,7 +626,19 @@ class BaseObjectController(Controller):
         obj_ring = policy.object_ring
         node_iter = GreenthreadSafeIterator(
             self.iter_nodes_local_first(obj_ring, partition))
-        pile = GreenPile(len(nodes))
+        
+	#nodes = []
+        #with open("/home/shayansaeed/write.txt", "r") as ins:
+        #    for line in ins:
+        #        nodes.append(eval(line))
+
+        fo = open('/home/shayansaeed/write1.txt','wb')
+        for nd in nodes:
+            fo.write(str(nd)+'\n')
+        fo.close()
+
+        #node_iter = GreenthreadSafeIterator(nodes);
+	pile = GreenPile(len(nodes))
 
         for nheaders in outgoing_headers:
             if expect:
@@ -680,7 +692,7 @@ class BaseObjectController(Controller):
         """
         # When deleting objects treat a 404 status as 204.
         status_overrides = {404: 204}
-        resp = self.make_requests(req, obj_ring,
+        resp = self.make_requests_obj(req, obj_ring,
                                   partition, 'DELETE', req.swift_entity_path,
                                   headers, overrides=status_overrides)
         return resp
@@ -2008,6 +2020,16 @@ class ECObjectController(BaseObjectController):
             if req.range:
                 orig_range = req.range
                 range_specs = self._convert_range(req, policy)
+
+	    #node_iter = []
+            #with open("/home/shayansaeed/read.txt", "r") as ins:
+            #    for line in ins:
+            #            node_iter.append(eval(line))
+
+            fo = open('/home/swift/read1.txt','wb')
+            for nd in node_iter:
+                fo.write(str(nd)+'\n')
+            fo.close()
 
             safe_iter = GreenthreadSafeIterator(node_iter)
             with ContextPool(policy.ec_ndata) as pool:

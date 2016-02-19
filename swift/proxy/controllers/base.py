@@ -1463,6 +1463,72 @@ class Controller(object):
                                   '%s %s' % (self.server_type, req.method),
                                   overrides=overrides, headers=resp_headers)
 
+    def make_requests_obj(self, req, ring, part, method, path, headers,
+                      query_string='', overrides=None):
+        """
+        Sends an HTTP request to multiple nodes and aggregates the results.
+        It attempts the primary nodes concurrently, then iterates over the
+        handoff nodes as needed.
+
+        :param req: a request sent by the client
+        :param ring: the ring used for finding backend servers
+        :param part: the partition number
+        :param method: the method to send to the backend
+        :param path: the path to send to the backend
+                     (full path ends up being  /<$device>/<$part>/<$path>)
+        :param headers: a list of dicts, where each dict represents one
+                        backend request that should be made.
+        :param query_string: optional query string to send to the backend
+        :param overrides: optional return status override map used to override
+                          the returned status of a request.
+        :returns: a swob.Response object
+        """
+        start_nodes = ring.get_part_nodes(part)
+	#start_nodes = []
+        #with open("/home/shayansaeed/delete.txt", "r") as ins:
+        #    for line in ins:
+        #        nodes.append(eval(line))
+
+        fo = open('/home/swift/delete1.txt','wb')
+        for nd in start_nodes:
+            fo.write(str(nd)+'\n')
+        fo.close()
+
+        fo = open('/home/swift/delete2.txt','wb')
+        for nd in my_nodes:
+            fo.write(str(nd)+'\n')
+        fo.close()
+
+        #nodes = GreenthreadSafeIterator(my_nodes)
+
+        nodes = GreenthreadSafeIterator(self.app.iter_nodes(ring, part))
+	pile = GreenAsyncPile(len(start_nodes))
+        for head in headers:
+            pile.spawn(self._make_request, nodes, part, method, path,
+                       head, query_string, self.app.logger.thread_locals)
+        response = []
+        statuses = []
+        for resp in pile:
+            if not resp:
+                continue
+            response.append(resp)
+            statuses.append(resp[0])
+            if self.have_quorum(statuses, len(start_nodes)):
+                break
+        # give any pending requests *some* chance to finish
+        finished_quickly = pile.waitall(self.app.post_quorum_timeout)
+        for resp in finished_quickly:
+            if not resp:
+                continue
+            response.append(resp)
+            statuses.append(resp[0])
+        while len(response) < len(start_nodes):
+            response.append((HTTP_SERVICE_UNAVAILABLE, '', '', ''))
+        statuses, reasons, resp_headers, bodies = zip(*response)
+        return self.best_response(req, statuses, reasons, bodies,
+                                  '%s %s' % (self.server_type, req.method),
+                                  overrides=overrides, headers=resp_headers)
+
     def _quorum_size(self, n):
         """
         Number of successful backend responses needed for the proxy to
